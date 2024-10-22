@@ -2,6 +2,8 @@ package headers;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.Set;
+import java.util.HashSet;
 
 public class veri_temizleme
 {
@@ -9,6 +11,7 @@ public class veri_temizleme
     static int comma_number = 0;
     static void reset_num_after_comma(){start_of_number =0;comma_number=0;}
     static float first_num_after_comma(String line, int TH_comma)
+    //---------------------------------------change to use line.split() !!!--------------------------------------------
     {
         String the_number = "";
         if(TH_comma == 0){reset_num_after_comma();}
@@ -37,6 +40,93 @@ public class veri_temizleme
         start_of_number--;
         return Float.parseFloat(the_number);
     }
+    static public void movie_elimination(String main_path)
+    /* main_path is where the cvs files going to read and written, not the to the cvs file itself.*/
+    {
+        String[] genres = {"Adventure","Animation","Children","Comedy","Fantasy","Drama","Romance","Crime","Thriller","Action"};
+        Set<Integer> deleted_movies = new HashSet<>(22558);//the number is got after testing, can be not accurate
+        try
+        {
+            BufferedReader movie_reader = new BufferedReader(new FileReader(main_path + "\\movie.csv"));
+
+            BufferedWriter movie_writer = new BufferedWriter(new FileWriter(main_path + "\\movie_0.csv"));
+
+            movie_reader.readLine();
+            boolean working=true;
+            String reading_line;
+            StringBuilder writing_line= new StringBuilder();
+
+            while(working)
+            {
+                reading_line = movie_reader.readLine();
+                if(reading_line!=null)
+                {
+                    String[] split_line = reading_line.split(",");//split lines by ","
+                    String[] tags = split_line[2].split("\\|");//split the 3. part of split line by "|"
+                    StringBuilder filtered_tags = new StringBuilder();
+
+                    for(String tag : tags)//looking if movie have the tags ı want and deleting extra ones
+                    {
+                        for(String filter : genres)
+                        {
+                            if(tag.equals(filter))
+                            {
+                                filtered_tags.append((filtered_tags.isEmpty()) ? tag : "|" + tag);
+                            }
+                        }
+                    }
+
+                    if(!filtered_tags.isEmpty())
+                    {
+                        writing_line.append(split_line[0]).append(",")
+                                    .append(split_line[1]).append(",")
+                                    .append(filtered_tags).append("\n");
+
+                        movie_writer.write(writing_line.toString());
+                        writing_line.setLength(0);
+                    }
+                    else{deleted_movies.add(Integer.parseInt(split_line[0]));}
+
+                }
+                else
+                {
+                    working =false;
+                    movie_writer.close();
+                    movie_reader.close();
+                }
+            }
+
+            working = true;
+
+            BufferedReader rating_reader = new BufferedReader(new FileReader(main_path + "\\rating.csv"));
+
+            BufferedWriter rating_writer = new BufferedWriter(new FileWriter(main_path + "\\rating_-1.csv"));
+
+            rating_reader.readLine();
+
+            while(working)
+            {
+                reading_line = rating_reader.readLine();
+
+                if(reading_line !=null) {
+                    if (!deleted_movies.contains((int) first_num_after_comma(reading_line, 1))) {
+                        rating_writer.write(reading_line+"\n");
+                    }
+                    reset_num_after_comma();
+                }
+                else
+                {
+                    rating_reader.close();
+                    rating_writer.close();
+                    working=false;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
     static public int temizle(String main_path,int combination)
         /* main_path is where the cvs files going to read and written, not the to the cvs file itself.
         * combination is the number of how many items is joined, it needs the previous step to be completed
@@ -45,7 +135,7 @@ public class veri_temizleme
         try
         {
             BufferedReader reader = new BufferedReader(new FileReader(main_path + "\\rating"
-                    + (combination==0?"": "_" + Integer.toString(combination-1)) + ".csv"));
+                    + "_" + Integer.toString(combination-1) + ".csv"));
 
             BufferedWriter writer = new BufferedWriter(new FileWriter(main_path + "\\rating_"
                     + Integer.toString(combination) + ".csv"));
@@ -78,7 +168,6 @@ public class veri_temizleme
                             writing_line.append("\n");
                             writer.write(writing_line.toString());
 
-                            System.out.println("writed:" + current_user_id);
 
                             writing_line.setLength(0);
 
@@ -89,6 +178,7 @@ public class veri_temizleme
                             }
                             writing_line.append("\n");
                             writer.write(writing_line.toString());
+
 
                             writing_line.setLength(0);
 
@@ -120,8 +210,8 @@ public class veri_temizleme
                         writer.write(writing_line.toString());
 
                         working =false;
-
-                        System.out.println("son satıra kadar okudum");
+                        writer.close();
+                        reader.close();
                     }
                 }
             }
