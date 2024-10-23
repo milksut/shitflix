@@ -62,6 +62,7 @@ public class veri_temizleme
                 if(reading_line!=null)
                 {
                     String[] split_line = reading_line.split(",");//split lines by ","
+                    split_line[2] = split_line[2].replace("\"","");//delete " parts from string so ve can filter
                     String[] tags = split_line[2].split("\\|");//split the 3. part of split line by "|"
                     StringBuilder filtered_tags = new StringBuilder();
 
@@ -71,7 +72,7 @@ public class veri_temizleme
                         {
                             if(tag.equals(filter))
                             {
-                                filtered_tags.append((filtered_tags.isEmpty()) ? tag : "|" + tag);
+                                filtered_tags.append((filtered_tags.isEmpty()) ? "\"" + tag : "|" + tag);
                             }
                         }
                     }
@@ -80,7 +81,7 @@ public class veri_temizleme
                     {
                         writing_line.append(split_line[0]).append(",")
                                     .append(split_line[1]).append(",")
-                                    .append(filtered_tags).append("\n");
+                                    .append(filtered_tags).append("\"").append("\n");
 
                         movie_writer.write(writing_line.toString());
                         writing_line.setLength(0);
