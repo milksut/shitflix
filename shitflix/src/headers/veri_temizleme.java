@@ -1,44 +1,50 @@
 package headers;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Set;
-import java.util.HashSet;
+import java.util.*;
+
 
 public class veri_temizleme
 {
-    static int start_of_number = 0;
-    static int comma_number = 0;
-    static void reset_num_after_comma(){start_of_number =0;comma_number=0;}
-    static float first_num_after_comma(String line, int TH_comma)
-    //---------------------------------------change to use line.split() !!!--------------------------------------------
+    public static float min_destek = 0.4F;
+    public static int min_izlenme_film = 1000;
+    public static int min_izleme_user = 1;
+    static float num_after_comma(String line, int TH_comma)
+    //just use commas as index(for 1. number use 0)
     {
-        String the_number = "";
-        if(TH_comma == 0){reset_num_after_comma();}
-        else if(TH_comma<=comma_number){
-            reset_num_after_comma();}
-        else
-        {
-            for (; start_of_number <= line.length(); start_of_number++) {
-                if (line.charAt(start_of_number) == ',') {
-                    comma_number++;
-                    if (comma_number >= TH_comma) {
-                        start_of_number++;
-                        break;
-                    }
-                }
-            }
-            if (start_of_number >= line.length()) {
-                throw new IllegalArgumentException("Not enough commas in the input line. Did you forget to reset the reader ?");
-            }
+        try {
+            String the_number = line.split(",")[TH_comma];
+            return Float.parseFloat(the_number);
         }
-        while(line.charAt(start_of_number)!=',')
+        catch (Exception e)
         {
-            the_number += line.charAt(start_of_number);
-            start_of_number++;
+            e.printStackTrace();
+            return 0;
         }
-        start_of_number--;
-        return Float.parseFloat(the_number);
+
+    }
+    static float[] num_after_comma(String line, int start_comma, int end_comma)
+    //just use commas as index(for 1. number use 0,1 or for 4th,5th and 6th numbers use 3,6)
+    //if you want to get until end(like from 1 to end of string) use -1(like 0,-1)
+    {
+        try {
+            String[] split_line = line.split(",");
+            if(end_comma <=-1)
+            {
+                end_comma = split_line.length;
+            }
+            float[] the_numbers = new float[end_comma-start_comma];
+            for (int i = start_comma; i < end_comma; i++)
+            {
+                the_numbers[i-start_comma] = Float.parseFloat(split_line[i]);
+            }
+            return the_numbers;
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            return new float[]{};
+        }
     }
     static public void movie_elimination(String main_path)
     /* main_path is where the cvs files going to read and written, not the to the cvs file itself.*/
@@ -51,7 +57,8 @@ public class veri_temizleme
 
             BufferedWriter movie_writer = new BufferedWriter(new FileWriter(main_path + "\\movie_0.csv"));
 
-            movie_reader.readLine();
+            movie_reader.readLine();//passing the first line (the line column names set)
+            movie_writer.write("\"movieId\",\"title\",\"genre...\"\n");
             boolean working=true;
             String reading_line;
             StringBuilder writing_line= new StringBuilder();
@@ -103,17 +110,17 @@ public class veri_temizleme
 
             BufferedWriter rating_writer = new BufferedWriter(new FileWriter(main_path + "\\rating_-1.csv"));
 
-            rating_reader.readLine();
+            rating_reader.readLine();//passing the first line (the line column names set)
+            rating_writer.write("\"userId\",\"movieId\",\"rating\",\"timestamp\"\n");
 
             while(working)
             {
                 reading_line = rating_reader.readLine();
 
                 if(reading_line !=null) {
-                    if (!deleted_movies.contains((int) first_num_after_comma(reading_line, 1))) {
+                    if (!deleted_movies.contains((int) num_after_comma(reading_line, 1))) {
                         rating_writer.write(reading_line+"\n");
                     }
-                    reset_num_after_comma();
                 }
                 else
                 {
@@ -151,16 +158,24 @@ public class veri_temizleme
                 ArrayList<Integer> movie_ids = new ArrayList<>(145);//starts with initial size of 145
                 ArrayList<Float> movie_scores = new ArrayList<>(145);//ı get this number from ratings line count % the biggest user_id
                 reader.readLine();//passing the first line (the line column names set)
+                writer.write("\"user_id\",\"movie_id...\"\n" +
+                                "\"user_id\",\"rating...\"\n");
 
                 while(working)
                 {
                     reading_line = reader.readLine();
-                    reset_num_after_comma();
                     if(reading_line!=null)
                     {
-                        int temp_user_id = (int)first_num_after_comma(reading_line,0);
+                        int temp_user_id = (int) num_after_comma(reading_line,0);
                         if(temp_user_id != current_user_id)
                         {
+                            if(movie_ids.size() < min_izleme_user)
+                            {
+                                current_user_id = temp_user_id;
+                                movie_ids.clear();
+                                movie_scores.clear();
+                                continue;
+                            }
                             writing_line.append(current_user_id);
                             for (Integer movie_id : movie_ids)
                             {
@@ -187,8 +202,8 @@ public class veri_temizleme
                             movie_ids.clear();
                             movie_scores.clear();
                         }
-                        movie_ids.add((int)first_num_after_comma(reading_line,1));
-                        movie_scores.add((float)first_num_after_comma(reading_line,2));
+                        movie_ids.add((int) num_after_comma(reading_line,1));
+                        movie_scores.add((float) num_after_comma(reading_line,2));
                     }
                     else
                     {
@@ -218,7 +233,72 @@ public class veri_temizleme
             }
             else if (combination==1)
             {
-                //------------------------------------Fill me!!!!!!!!!!!----------------------------------
+
+                BufferedReader movie_reader = new BufferedReader(new FileReader(main_path + "\\movie_0.csv"));
+
+                movie_reader.readLine();//passing the first line (the line column names set)
+                LinkedHashMap<Integer, ArrayList<Integer>> movies = new LinkedHashMap<>(18000);//movies<movie_id, "watch_amount,user_ids...">
+
+                while (working)//hashmap initialization
+                {
+                    reading_line = movie_reader.readLine();
+                    if(reading_line!=null)
+                    {
+                        int movie_id = (int) num_after_comma(reading_line, 0);
+                        movies.putIfAbsent(movie_id, new ArrayList<Integer>(830));//experimental number, can be changed
+                        movies.get(movie_id).add(0);//initialize amount watched, so I can increase it in a loop
+                    }
+                    else
+                    {
+                        working=false;
+                        movie_reader.close();
+                    }
+                }
+
+                working=true;
+                reader.readLine();//passing the first line (the line column names set)
+                reader.readLine();//passing the second line (the line column names set)
+
+
+                while (working)//filling the arrays
+                {
+                    reading_line = reader.readLine();//read the line where "user_id","movie_id..."
+                    if(reading_line!=null)
+                    {
+                        int user_id = (int)num_after_comma(reading_line,0);
+                        float[] movie_ids = num_after_comma(reading_line,1,-1);
+                        //it's actually int[] but to be able to read ratings(witch are float values) function returns a float[]
+                        for(float x: movie_ids)
+                        {
+                            ArrayList<Integer> watchers = movies.get((int)x);
+                            watchers.set(0,watchers.getFirst()+1);
+                            watchers.add(user_id);
+                        }
+                    }
+                    else
+                    {
+                        working = false;
+                        reader.close();
+                        break;
+                    }
+                    reader.readLine();//pass the line where "user_id","rating..."
+                }
+
+                writer.write("\"movie_id\",\"views\",\"user...\"");
+
+                for(Map.Entry<Integer, ArrayList<Integer>> entry : movies.entrySet())
+                {
+                    if(entry.getValue().getFirst() <= min_izlenme_film){continue;}
+                    writing_line.append(entry.getKey());
+                    for(int x:entry.getValue())
+                    {
+                        writing_line.append(",").append(x);
+                    }
+                    writing_line.append("\n");
+                    writer.write(writing_line.toString());
+                    writing_line.setLength(0);
+                }
+                writer.close();
             }
             else
             {
