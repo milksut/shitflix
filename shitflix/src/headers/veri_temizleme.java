@@ -6,14 +6,45 @@ import java.util.*;
 
 public class veri_temizleme
 {
-    public static float min_destek = 0.4F;
+    public static float min_destek = 0.1F;
     public static int min_izlenme_film = 1000;
     public static int min_izleme_user = 1;
 
+    private static int common_user_amount;
+
+    private static String find_common_users(float[] data1, float[] data2,int jump)
+    //finds the same numbers in sorted arrays, passes the first "jump" numbers
+    {
+        StringBuilder common_users = new StringBuilder(Math.min(data1.length,data2.length) * 4);//4 is experimental, 3 for user_id and 1 for comma
+
+        int i=jump,j=jump;
+        common_user_amount =0;
+
+        while (i < data1.length && j < data2.length)
+        {
+            if(data1[i] == data2[j])
+            {
+                common_users.append((int)data1[i]).append(",");
+                common_user_amount++;
+                i++;
+                j++;
+            }
+            else if (data1[i] < data2[j]){i++;}
+            else{j++;}
+        }
+
+        if (common_user_amount > 0)
+        {
+            common_users.setLength(common_users.length() - 1); // Remove the trailing comma
+        }
+
+        return common_users.toString();
+    }
 
     static float num_after_comma(String line, int TH_comma)
     //just use commas as index(for 1. number use 0)
     {
+        if(TH_comma<0){return -1.0f;}
         String the_number = "";
         int start_of_number = 0, comma_number =0;
 
@@ -110,7 +141,7 @@ public class veri_temizleme
                     {
                         reading_map.put(temp_id,start_point);
                         last_id = temp_id;
-                        //System.out.println("I like seeing data on console so i printed the last id i finished: "+temp_id);
+                        System.out.println("I like seeing data on console, so I printed the last id I finished: "+temp_id);
                         if(reading_map.size() >= chunk_size)
                         {
                             outputStream.writeObject(reading_map);
@@ -164,6 +195,38 @@ public class veri_temizleme
         {
             e.printStackTrace();
             return null;
+        }
+    }
+
+    static ArrayList<String> bulk_read(RandomAccessFile reader,int different_index)
+    //reads lines with reader, checks if number at the index is different, stores inside array, then returns. DOES NOT RESET READER!
+    {
+        try
+        {
+            String temp = reader.readLine();
+            int current_id = (int)num_after_comma(temp,different_index);
+            ArrayList<String> outcome = new ArrayList<>(2500);//experimental, can be changed
+            boolean working = true;
+            long chekpoint;
+            while (working)
+            {
+                if(temp!=null)
+                {
+                    outcome.add(temp);
+                    chekpoint = reader.getFilePointer();
+                    temp = reader.readLine();
+
+                    if((int)num_after_comma(temp,different_index)!=current_id)
+                    {working =false;reader.seek(chekpoint);}
+                }
+                else {working=false;}
+            }
+            return outcome;
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            return new ArrayList<>(2500);
         }
     }
 
@@ -267,11 +330,9 @@ public class veri_temizleme
     * combination is the number of how many items is joined, it needs the previous step to be completed
     * (if you want to do 3, you should be already done with step 2)*/
     {
-        try
+        try(RandomAccessFile reader = new RandomAccessFile(main_path + "\\rating"
+                + "_" + Integer.toString(combination-1) + ".csv","r"))
         {
-            BufferedReader reader = new BufferedReader(new FileReader(main_path + "\\rating"
-                    + "_" + Integer.toString(combination-1) + ".csv"));
-
             BufferedWriter writer = new BufferedWriter(new FileWriter(main_path + "\\rating_"
                     + Integer.toString(combination) + ".csv"));
 
@@ -359,7 +420,7 @@ public class veri_temizleme
                     }
                 }
             }
-            else if (combination==1)//also finds the average rating of movies
+            else if (combination==1)//passing the first line (the line column names set)
             {
 
                 BufferedReader movie_reader = new BufferedReader(new FileReader(main_path + "\\movie_0.csv"));
@@ -444,9 +505,90 @@ public class veri_temizleme
             }
             else
             {
-                //------------------------------------Fill me!!!!!!!!!!!----------------------------------
-            }
+                writing_line.append("\"movie_id\",".repeat(combination));
+                writer.write(writing_line.toString() + "\"views\",\"filler\",\"user...\"\n");
+                writing_line.setLength(0);
+                //setting column names
 
+                reader.readLine();//passing the first line (the line column names set)
+
+                ArrayList<String> data_set = bulk_read(reader,-1);
+                int  data_1_index=0,data_2_index=1;
+
+                while (true)
+                {
+                    long startTime = System.currentTimeMillis();
+
+                    float[] data_1 = num_after_comma(data_set.get(data_1_index),0,-1);
+
+                    data_2_index = data_1_index+1;
+
+                    while (data_2_index < data_set.size()-1)
+                    {
+
+                        boolean working_2 = true;
+
+                        float[] data_2 = num_after_comma(data_set.get(data_2_index),0,-1);
+
+                        int[] movie_comb = new int[combination];
+
+                        for (int i = combination-3; i >= 0; i--)
+                        {
+                            if(data_1[i] != data_2[i])
+                            {
+                                working_2 = false;
+                                break;
+                            }
+
+                            movie_comb[i] = (int)data_1[i];
+                        }
+
+                        if(!working_2){break;}
+
+                        movie_comb[combination-2] = (int)data_1[combination-2];
+                        movie_comb[combination-1] = (int)data_2[combination-2];
+
+                        String common_users = find_common_users(data_1,data_2,combination+1);//combination-1 for movie ids +2 for views and rating(or filler)
+
+
+                        if(Math.floor((( data_1[combination - 1] + data_2[combination - 1])/2)*min_destek) <= common_user_amount)
+                            //average watching * min_destek <= common watchers
+                        {
+
+                            for(int x : movie_comb){writing_line.append(x).append(",");}
+
+                            writing_line.append(common_user_amount).append(",-1,");//-views and filler(ı don't know what to put there)
+
+                            writer.write(writing_line.toString());
+
+                            writing_line.setLength(0);
+
+                            writer.write(common_users + "\n");
+
+                        }
+
+                        data_2_index++;
+
+                    }
+
+                    data_1_index++;
+
+                    long endTime = System.currentTimeMillis();
+
+                    System.out.println("finished the combinations of: " + data_1[0] + " in " + (endTime - startTime) + " milliseconds");
+
+                    if(data_1_index>data_set.size()-2)
+                    {
+                        data_1_index =0;
+                        data_2_index =1;
+                        data_set = bulk_read(reader,-1);
+                        if(data_set.isEmpty()){break;}
+                    }
+                }
+                reader.close();
+                writer.close();
+            }
+            System.out.println("İş bitti, haritalamaya geçtim");
             make_map(main_path + "\\rating_" + Integer.toString(combination) + ".csv",
                     main_path + "\\maps\\rating_" + Integer.toString(combination) + "_map.bin", combination!=0 ? 1:2);
 
