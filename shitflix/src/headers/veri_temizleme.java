@@ -6,7 +6,7 @@ import java.util.*;
 
 public class veri_temizleme
 {
-    public static float min_destek = 0.1F;
+    public static float min_destek = 0.4F;
     public static int min_izlenme_film = 1000;
     public static int min_izleme_user = 1;
 
@@ -104,12 +104,15 @@ public class veri_temizleme
         }
     }
 
-    static public int chunk_size = 200000;//IMPORTANT: DO NOT CHANGE BEFORE READİNG, ONLY CHANGE BEFORE MAKING. chunk size for making and reading maps
-    static void make_map(String main_path, String map_path, int lines_to_jump)//lines_to_jump is the  number of declaration lines
-    //main_path is a csv file that you want mapped(so it can be used with find_by_id)
+    static public int max_chunk_size = 200000;//IMPORTANT: DO NOT CHANGE BEFORE READİNG, ONLY CHANGE BEFORE MAKING. chunk size for making and reading maps
+    public static void make_map(String main_path, String map_path, int lines_to_jump, int key_length)
+    //lines_to_jump is the  number of declaration lines, key_length is amount of integers in key
+    //main_path is a csv file that you want mapped(so it can be used with read_map)
     //map_path is where map goes, you should give an exact path(one that end with a xxx_map.bin), it will crate or overwrite that file
     {
-        HashMap<Integer,Long> reading_map = new HashMap<Integer,Long>(chunk_size+1);
+        long time_start = System.currentTimeMillis();
+
+        LinkedHashMap<ArrayList<Integer>,Long> reading_map = new LinkedHashMap<ArrayList<Integer>,Long>(max_chunk_size +1);
 
         try(RandomAccessFile reader = new RandomAccessFile(main_path,"r"))
         {
@@ -124,11 +127,18 @@ public class veri_temizleme
             String reading_line;
             boolean working=true;
             long start_point;
-            int last_id=-1;
+            ArrayList<Integer> last_id = new ArrayList<>(key_length);
+            ArrayList<Integer> temp_id = new ArrayList<>(key_length);
+
+            for (int i = 0; i < key_length; i++)
+            {
+                temp_id.add(0);
+            }
 
             for (int i = 0; i < lines_to_jump; i++) {
                 reader.readLine();//passing type declaration at the start(like "id","movie_name","genres")
             }
+
 
             while (working)
             {
@@ -136,16 +146,25 @@ public class veri_temizleme
                 reading_line = reader.readLine();
                 if(reading_line != null)
                 {
-                    int temp_id = (int)num_after_comma(reading_line,0);
-                    if(temp_id!=last_id)
+                    for (int i = 0; i < key_length; i++)
                     {
-                        reading_map.put(temp_id,start_point);
-                        last_id = temp_id;
-                        System.out.println("I like seeing data on console, so I printed the last id I finished: "+temp_id);
-                        if(reading_map.size() >= chunk_size)
+                        temp_id.set(i,((int)num_after_comma(reading_line,i)));
+                    }
+                    if(!temp_id.equals(last_id))
+                    {
+
+                        reading_map.put((ArrayList<Integer>) temp_id.clone(),start_point);
+                        last_id = (ArrayList<Integer>) temp_id.clone();
+
+                        System.out.println("program is running! " + temp_id.getFirst() +"-"+temp_id.getLast());
+
+                        if(reading_map.size() >= max_chunk_size || (reading_map.size() >=max_chunk_size/2
+                                && !Objects.equals(temp_id.get(key_length - 2), last_id.get(key_length - 2))))
                         {
                             outputStream.writeObject(reading_map);
-                            System.out.println("wrote a chunk with size: " + reading_map.size());
+                            System.out.print("wrote a chunk with size: " + reading_map.size() + " last id group  ı read: ");
+                            for (int x : temp_id){System.out.print(x + ",");}
+                            System.out.print("\n");
                             reading_map.clear();
                         }
                     }
@@ -158,8 +177,12 @@ public class veri_temizleme
             }
 
             outputStream.writeObject(reading_map);
+            System.out.print("wrote a chunk with size: " + reading_map.size() + " last id group  ı read: ");
+            for (int x : temp_id){System.out.print(x + ",");}
+            System.out.print("\n");
+
             outputStream.close();
-            System.out.println("Finished mapping: " + map_path);
+            System.out.print("\n\nFinished mapping: " + map_path + " in " + (System.currentTimeMillis()-time_start) + " milliseconds!\n\n");
         }
         catch (Exception e)
         {
@@ -168,7 +191,7 @@ public class veri_temizleme
 
     }
 
-    static HashMap<Integer,Long> read_map(String map_path,int must_key)
+    static LinkedHashMap<ArrayList<Integer>,Long> read_map(String map_path,ArrayList<Integer> must_key)
     //reads a map crated by make_map function, returns the map  chunk containing have must_key,
     //where each id's line start position on file that mapped, if cant find it, throws RuntimeException and returns a null
     {
@@ -176,7 +199,7 @@ public class veri_temizleme
         {
             while (true)
             {
-                HashMap<Integer, Long> outcome = (HashMap<Integer, Long>) inputStream.readObject();
+                LinkedHashMap<ArrayList<Integer>, Long> outcome = (LinkedHashMap<ArrayList<Integer>, Long>) inputStream.readObject();
 
                 if(outcome.containsKey(must_key))
                 {
@@ -189,7 +212,7 @@ public class veri_temizleme
         catch (IOException e)
         {
             // End of file or stream issue
-            throw new RuntimeException("Couldn't find the " + must_key + " in the map: " + map_path);
+            throw new RuntimeException("Couldn't find the key in the map: " + map_path);
         }
         catch (Exception e)
         {
@@ -203,6 +226,7 @@ public class veri_temizleme
     {
         try
         {
+            long time_start = System.currentTimeMillis();
             String temp = reader.readLine();
             int current_id = (int)num_after_comma(temp,different_index);
             ArrayList<String> outcome = new ArrayList<>(2500);//experimental, can be changed
@@ -221,6 +245,8 @@ public class veri_temizleme
                 }
                 else {working=false;}
             }
+            System.out.println("finished reading " + current_id + "'tys in "
+                    + (System.currentTimeMillis()-time_start) + " milliseconds");
             return outcome;
         }
         catch (Exception e)
@@ -288,7 +314,7 @@ public class veri_temizleme
                 }
             }
 
-            make_map(main_path + "\\movie_0.csv",main_path + "\\maps\\movie_0_map.bin", 1);
+            make_map(main_path + "\\movie_0.csv",main_path + "\\maps\\movie_0_map.bin", 1,1);
 
             working = true;
 
@@ -316,7 +342,7 @@ public class veri_temizleme
                 }
             }
 
-            make_map(main_path + "\\rating_-1.csv",main_path + "\\maps\\rating_-1_map.bin", 1);
+            make_map(main_path + "\\rating_-1.csv",main_path + "\\maps\\rating_-1_map.bin", 1,1);
 
         }
         catch (Exception e)
@@ -420,7 +446,7 @@ public class veri_temizleme
                     }
                 }
             }
-            else if (combination==1)//passing the first line (the line column names set)
+            else if (combination==1)//also finds the average rating of movies
             {
 
                 BufferedReader movie_reader = new BufferedReader(new FileReader(main_path + "\\movie_0.csv"));
@@ -512,7 +538,7 @@ public class veri_temizleme
 
                 reader.readLine();//passing the first line (the line column names set)
 
-                ArrayList<String> data_set = bulk_read(reader,-1);
+                ArrayList<String> data_set = bulk_read(reader,combination-3);
                 int  data_1_index=0,data_2_index=1;
 
                 while (true)
@@ -575,13 +601,17 @@ public class veri_temizleme
 
                     long endTime = System.currentTimeMillis();
 
-                    System.out.println("finished the combinations of: " + data_1[0] + " in " + (endTime - startTime) + " milliseconds");
+                    System.out.print("finished the combinations of: ");
+                    for (int i = 0; i < combination-1; i++)
+                    {
+                        System.out.print((int)data_1[i]+", ");
+                    }
+                    System.out.print(" in " + (endTime - startTime) + " milliseconds\n");
 
                     if(data_1_index>data_set.size()-2)
                     {
                         data_1_index =0;
-                        data_2_index =1;
-                        data_set = bulk_read(reader,-1);
+                        data_set = bulk_read(reader,combination-3);
                         if(data_set.isEmpty()){break;}
                     }
                 }
@@ -589,8 +619,8 @@ public class veri_temizleme
                 writer.close();
             }
             System.out.println("İş bitti, haritalamaya geçtim");
-            make_map(main_path + "\\rating_" + Integer.toString(combination) + ".csv",
-                    main_path + "\\maps\\rating_" + Integer.toString(combination) + "_map.bin", combination!=0 ? 1:2);
+            make_map(main_path + "\\rating_" + Integer.toString(combination) + ".csv", main_path +
+                    "\\maps\\rating_" + Integer.toString(combination) + "_map.bin", combination!=0 ? 1:2,combination>0?combination:1);
 
         }
         catch (FileNotFoundException e)
@@ -640,13 +670,13 @@ public class veri_temizleme
             boolean working=true;
             String reading_line;
 
-            ArrayList<PriorityQueue<movie_obj>> genre_que = new ArrayList<PriorityQueue<movie_obj>>(genres.length);
+            ArrayList<PriorityQueue<movie_obj>> genre_que = new ArrayList<>(genres.length);
             for(int i=0;i< genres.length;i++)//initialization
             {
-                genre_que.add(new PriorityQueue<movie_obj>(x+1,Comparator.comparingDouble(r -> r.average_rating*r.views)));
+                genre_que.add(new PriorityQueue<>(x + 1, Comparator.comparingDouble(r -> r.average_rating * r.views)));
             }
 
-            HashMap<Integer,Long> map = new HashMap<>();
+            HashMap<ArrayList<Integer>,Long> map = new HashMap<>();
             rating_reader.readLine();//passing the first line (the line column names set("movie_id","views","average_rating(base 100)","user..."))
 
             while (working)
@@ -656,11 +686,16 @@ public class veri_temizleme
                 {
                     movie_obj temp_obj = new movie_obj((int)num_after_comma(reading_line,0),
                             (int)num_after_comma(reading_line,1), (int)num_after_comma(reading_line,2),reading_line);
-                    if(!map.containsKey(temp_obj.movie_id))
+
+                    ArrayList<Integer> key = new ArrayList<>(1);
+                    key.add(temp_obj.movie_id);
+
+                    if(!map.containsKey(key))
                     {
-                        map = read_map(main_path + "\\maps\\movie_0_map.bin",temp_obj.movie_id);
+                        map = read_map(main_path + "\\maps\\movie_0_map.bin",key);
                     }
-                    movie_reader.seek(map.get(temp_obj.movie_id));
+                    movie_reader.seek(map.get(key));
+
                     reading_line = movie_reader.readLine();
                     String[] tags = reading_line.split(",")[2].replace("\"","").split("\\|");
 
@@ -697,7 +732,7 @@ public class veri_temizleme
                 BufferedWriter writer = new BufferedWriter(new FileWriter(main_path + "\\popular\\" + genres[i] + "\\ratings_1.csv"));
                 writer.write("\"movie_id\",\"views\",\"average_rating(base 100)\",\"user...\"\n");
 
-                ArrayList<movie_obj> sorter = new ArrayList<movie_obj>(x+1);
+                ArrayList<movie_obj> sorter = new ArrayList<>(x + 1);
 
                 sorter.addAll(genre_que.get(i));
                 sorter.sort(Comparator.comparingInt(movie -> movie.movie_id));
@@ -706,7 +741,7 @@ public class veri_temizleme
 
                 writer.close();
                 make_map(main_path + "\\popular\\" + genres[i] + "\\ratings_1.csv",
-                        main_path + "\\popular\\" + genres[i] + "\\maps\\ratings_1_map.bin",1);
+                        main_path + "\\popular\\" + genres[i] + "\\maps\\ratings_1_map.bin",1,1);
             }
 
         }
