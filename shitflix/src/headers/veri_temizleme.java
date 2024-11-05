@@ -7,7 +7,7 @@ import java.util.*;
 public class veri_temizleme
 {
     public static float min_destek = 0.4F;
-    public static int min_izlenme_film = 1000;
+    public static int min_izlenme_film = 14000;
     public static int min_izleme_user = 1;
 
     private static ArrayList<Integer> find_common_Integers(ArrayList<Integer> data1, ArrayList<Integer> data2)
