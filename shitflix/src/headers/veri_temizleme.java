@@ -6,7 +6,8 @@ import java.util.*;
 
 public class veri_temizleme
 {
-    public static float min_destek = 0.4F;
+    public static float min_guven = 0.4F;
+    public static int total_user = 140000;
     public static int min_izlenme_film = 14000;
     public static int min_izleme_user = 1;
 
@@ -321,7 +322,7 @@ public class veri_temizleme
 
                     ref_temp.rating_hesapla();
 
-                    /*if(ref_temp.average_rating < (min_destek*100))
+                    /*if(ref_temp.average_rating < (min_guven*100))
                     {
                         iterator.remove();
                         continue;
@@ -455,8 +456,6 @@ public class veri_temizleme
         return 0;
     }
 
-
-
     static public void most_popular_x_of_genre(String main_path,String[] genres, int x)
     /* this function needs the temizle function's combination 1 and movie elimination to be finished
     * main_path is where the .bin files going to read and written, not the to the .bin file itself.
@@ -560,4 +559,139 @@ public class veri_temizleme
             e.printStackTrace();
         }
     }
+
+    class rule implements Serializable
+    {
+        @Serial
+        private static final long serialVersionUID = 1L;//I don't know what it does, it recommended when making objects serializable
+
+        ArrayList<Integer> source;
+        ArrayList<Integer> target;
+
+        float guven;
+        float lift;
+
+        public rule(ArrayList<Integer> source, ArrayList<Integer> target) {
+            this.source = (ArrayList<Integer>) source.clone();
+            this.target = (ArrayList<Integer>) target.clone();
+        }
+    }
+
+    static private class combination_finder
+    {
+        int key_size;
+        private ArrayList<Integer> key_pointers;
+        ArrayList<Integer> key_ids;
+        ArrayList<Integer> target_ids;
+        ArrayList<Integer> all_ids;
+
+        combination_finder(ArrayList<Integer> all_ids,int key_size)
+        {
+            //this.all_ids = (ArrayList<Integer>) all_ids.clone();//seems un needed but ı am not sure
+            this.all_ids = all_ids;
+            this.key_pointers = new ArrayList<>(key_size);
+            this.key_size=key_size;
+
+            this.key_ids =new ArrayList<>(key_size);
+            this.target_ids =new ArrayList<>(all_ids.size()-key_size);
+
+            for (int i = 0; i < key_size; i++)
+            {
+                this.key_pointers.add(i);
+                this.key_ids.add(all_ids.get(i));
+            }
+            for (int i = key_size; i < all_ids.size(); i++)
+            {
+                this.target_ids.add(all_ids.get(i));
+            }
+        }
+
+        boolean next_comb()
+        {
+            //----------------------fill me!-------------------------------------------------------------------------------------------------
+            return true;//new combinations found
+            return false;//no new combinations
+        }
+
+    }
+
+    static public int kural_bul(String main_path,int combination,int max_rec_target)
+    //max rec target is also finds it other counterpart(like for comb5, 1 also fids 4's and 2 also finds 3's) but as long as it under limit it don't write it
+    {
+        try
+        {
+            if(combination<2)
+            {
+                throw new RuntimeException("you can only find rules starting from combination 2!, pls use minimum of 2 for combination");
+            }
+            else if(max_rec_target<1 || max_rec_target >= combination)
+            {
+                throw new RuntimeException("max_rec_target can be minimum 1 and maximum combination-1! use 1 for convenience or bigger for more pain");
+            }
+            else
+            {
+                ArrayList<LinkedHashMap<ArrayList<Integer>,String>> maps = new ArrayList<>(combination);
+                ObjectInputStream map_reader;
+                for (int i = 1; i <= combination; i++)
+                {
+                    map_reader = new ObjectInputStream(new FileInputStream(main_path+"\\rating_" + i + ".bin"));
+                    maps.add((LinkedHashMap<ArrayList<Integer>,String>) map_reader.readObject());
+                    map_reader.close();
+                }
+
+                LinkedHashMap<ArrayList<Integer>,LinkedHashMap<ArrayList<Integer>,movie_obj>> data =
+                        new LinkedHashMap<>(combination-1,1,true)
+                        {
+                            @Override
+                            protected boolean removeEldestEntry(Map.Entry<ArrayList<Integer>, LinkedHashMap<ArrayList<Integer>, movie_obj>> eldest)
+                            {
+                                return size() > 200;//experimental, pls change
+                            }
+                        };
+                //last access ordered object so ı can store the data's ı need without filling my ram
+
+
+                LinkedHashMap<ArrayList<Integer>,ArrayList<rule>> rules = new LinkedHashMap<>(50000);
+                //experimental number, format is <source,target_rules>
+
+                for(Map.Entry<ArrayList<Integer>,String> entry : maps.get(combination-1).entrySet())
+                {
+                    ObjectInputStream reader = new ObjectInputStream(new FileInputStream(entry.getValue()));
+                    LinkedHashMap<ArrayList<Integer>, movie_obj> combinations = (LinkedHashMap<ArrayList<Integer>, movie_obj>)reader.readObject();
+                    reader.close();
+
+                    for(Map.Entry<ArrayList<Integer>,movie_obj> the_combination : combinations.entrySet())
+                    {
+                        ArrayList<Integer> ids = the_combination.getKey();
+                        movie_obj big_obj = the_combination.getValue();
+                        movie_obj source;
+                        movie_obj target;
+                        for (int i = 1; i <= combination-max_rec_target; i++)
+                        {
+                            combination_finder machine = new combination_finder(ids,i);
+                            do
+                            {
+                                //-------------------------fill me!------------------------------------------------------------------------------------
+                                //before doing hard work, check if that combination exist in the first place! you need the pull that info anyway
+                                //look from data object, if not present add it, doesn't forget you have all the maps needed in maps object
+                                //if needed just reverse the target and source values to do the other part of rule(on a 5 comb, if you are finding 2's, you are also finding the 3's)
+                            }while (machine.next_comb());
+
+                        }
+
+                    }
+
+                }
+
+
+            }
+            return 0;
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
 }
