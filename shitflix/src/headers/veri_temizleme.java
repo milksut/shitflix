@@ -3,10 +3,10 @@ package headers;
 import java.io.*;
 import java.util.*;
 
-
 public class veri_temizleme
 {
     public static float min_guven = 0.4F;
+    public static float min_lift = 1.7F;
     public static int total_user = 140000;
     public static int min_izlenme_film = 14000;
     public static int min_izleme_user = 1;
@@ -560,7 +560,7 @@ public class veri_temizleme
         }
     }
 
-    class rule implements Serializable
+    static class rule implements Serializable
     {
         @Serial
         private static final long serialVersionUID = 1L;//I don't know what it does, it recommended when making objects serializable
@@ -569,12 +569,19 @@ public class veri_temizleme
         ArrayList<Integer> target;
 
         float guven;
-        float lift;
+        public float lift;
 
         public rule(ArrayList<Integer> source, ArrayList<Integer> target) {
             this.source = (ArrayList<Integer>) source.clone();
             this.target = (ArrayList<Integer>) target.clone();
         }
+
+        public void find_guven_lift(int all_comb_watch,int source_watch,int target_watch)
+        {
+            this.guven = (float) all_comb_watch /source_watch;
+            this.lift =  (guven/target_watch)*total_user;
+        }
+
     }
 
     static private class combination_finder
@@ -585,12 +592,12 @@ public class veri_temizleme
         ArrayList<Integer> target_ids;
         ArrayList<Integer> all_ids;
 
-        combination_finder(ArrayList<Integer> all_ids,int key_size)
+        combination_finder(ArrayList<Integer> all_ids,int target_size)
         {
             //this.all_ids = (ArrayList<Integer>) all_ids.clone();//seems un needed but ı am not sure
             this.all_ids = all_ids;
             this.key_pointers = new ArrayList<>(key_size);
-            this.key_size=key_size;
+            this.key_size=all_ids.size()-target_size;
 
             this.key_ids =new ArrayList<>(key_size);
             this.target_ids =new ArrayList<>(all_ids.size()-key_size);
@@ -608,14 +615,52 @@ public class veri_temizleme
 
         boolean next_comb()
         {
-            //----------------------fill me!-------------------------------------------------------------------------------------------------
-            return true;//new combinations found
-            return false;//no new combinations
+            int changing_key = key_size-1;
+            boolean working =true;
+            while (working)
+            {
+                if(key_pointers.get(changing_key) < all_ids.size()-(key_size-changing_key))
+                {
+                    key_pointers.set(changing_key,key_pointers.get(changing_key)+1);
+                    if(changing_key == key_size-1)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        changing_key++;
+                        key_pointers.set(changing_key,key_pointers.get(changing_key-1)+1);
+                    }
+                }
+                else if(changing_key == key_size-1){working = false;break;}
+                else {changing_key--;}
+            }
+            if(working)
+            {
+                changing_key=0;
+                key_ids.clear();
+                target_ids.clear();
+                for (int i = 0; i < key_size; i++)
+                {
+                    for (; changing_key < key_pointers.get(i); changing_key++)
+                    {
+                        target_ids.add(all_ids.get(changing_key));
+                    }
+                    key_ids.add(all_ids.get(changing_key));
+                    changing_key++;
+                }
+                for (; changing_key < all_ids.size(); changing_key++)
+                {
+                    target_ids.add(all_ids.get(changing_key));
+                }
+            }
+
+            return working;//new combinations found or not
         }
 
     }
 
-    static public int kural_bul(String main_path,int combination,int max_rec_target)
+    static public int kural_bul(String main_path, int combination, int max_rec_target)
     //max rec target is also finds it other counterpart(like for comb5, 1 also fids 4's and 2 also finds 3's) but as long as it under limit it don't write it
     {
         try
@@ -630,6 +675,8 @@ public class veri_temizleme
             }
             else
             {
+                long start_time = System.currentTimeMillis();
+
                 ArrayList<LinkedHashMap<ArrayList<Integer>,String>> maps = new ArrayList<>(combination);
                 ObjectInputStream map_reader;
                 for (int i = 1; i <= combination; i++)
@@ -654,36 +701,142 @@ public class veri_temizleme
                 LinkedHashMap<ArrayList<Integer>,ArrayList<rule>> rules = new LinkedHashMap<>(50000);
                 //experimental number, format is <source,target_rules>
 
+                System.out.println("finished initialization in " + (start_time-System.currentTimeMillis()) + "milliseconds!");
+
                 for(Map.Entry<ArrayList<Integer>,String> entry : maps.get(combination-1).entrySet())
                 {
+                    start_time = System.currentTimeMillis();
+
                     ObjectInputStream reader = new ObjectInputStream(new FileInputStream(entry.getValue()));
                     LinkedHashMap<ArrayList<Integer>, movie_obj> combinations = (LinkedHashMap<ArrayList<Integer>, movie_obj>)reader.readObject();
                     reader.close();
 
+                    System.out.println("\n\n read the " + entry.getValue() + " in " + (start_time-System.currentTimeMillis()) + "milliseconds!\n");
+
                     for(Map.Entry<ArrayList<Integer>,movie_obj> the_combination : combinations.entrySet())
                     {
+                        start_time = System.currentTimeMillis();
+
                         ArrayList<Integer> ids = the_combination.getKey();
                         movie_obj big_obj = the_combination.getValue();
                         movie_obj source;
                         movie_obj target;
-                        for (int i = 1; i <= combination-max_rec_target; i++)
+                        for (int i = 1; i <=Math.min( combination/2,max_rec_target); i++)
                         {
                             combination_finder machine = new combination_finder(ids,i);
+
                             do
                             {
-                                //-------------------------fill me!------------------------------------------------------------------------------------
-                                //before doing hard work, check if that combination exist in the first place! you need the pull that info anyway
-                                //look from data object, if not present add it, doesn't forget you have all the maps needed in maps object
-                                //if needed just reverse the target and source values to do the other part of rule(on a 5 comb, if you are finding 2's, you are also finding the 3's)
+                                ArrayList<Integer> temp = (ArrayList<Integer>) machine.target_ids.clone();
+                                temp.removeLast();
+                                if(temp.isEmpty()){temp.add(0);}
+                                if(!data.containsKey(temp))//is the object already in data?
+                                {
+                                    if(!maps.get(temp.getFirst()==0?0:temp.size()).containsKey(temp))
+                                    {
+                                        continue;
+                                    }
+
+                                    reader = new ObjectInputStream(new FileInputStream(maps.get(temp.getFirst()==0?0:temp.size()).get(temp)));
+                                    data.put(temp,(LinkedHashMap<ArrayList<Integer>,movie_obj>)reader.readObject());
+                                    reader.close();
+                                }
+                                if(!data.get(temp).containsKey(machine.target_ids)){continue;}
+
+
+                                target = data.get(temp).get(machine.target_ids);
+
+
+                                temp = (ArrayList<Integer>) machine.key_ids.clone();
+                                temp.removeLast();
+                                if(temp.isEmpty()){temp.add(0);}
+
+                                if(!data.containsKey(temp))//is the object already in data?
+                                {
+                                    if(!maps.get(temp.getFirst()==0?0:temp.size()).containsKey(temp))
+                                    {
+                                        continue;
+                                    }
+
+                                    reader = new ObjectInputStream(new FileInputStream(maps.get(temp.size()).get(temp)));
+                                    data.put(temp,(LinkedHashMap<ArrayList<Integer>,movie_obj>)reader.readObject());
+                                    reader.close();
+                                }
+                                if(!data.get(temp).containsKey(machine.key_ids)){continue;}
+
+
+                                source = data.get(temp).get(machine.key_ids);
+
+
+                                rule new_rule = new rule(source.movie_ids,target.movie_ids);
+                                new_rule.find_guven_lift(big_obj.views,source.views,target.views);
+
+                                if(new_rule.lift>=min_lift)//min_guven can also be tested here
+                                {
+                                    if(!rules.containsKey(new_rule.source))
+                                    {
+                                        rules.put(new_rule.source,new ArrayList<>(500));
+                                    }
+                                    rules.get(new_rule.source).add(new_rule);
+                                }
+
+                                if(source.movie_ids.size()<= max_rec_target)
+                                {
+                                    movie_obj temp_movie_obj = source;
+                                    source = target;
+                                    target = temp_movie_obj;
+
+                                    rule new_rule2 = new rule(source.movie_ids,target.movie_ids);
+                                    new_rule2.find_guven_lift(big_obj.views,source.views,target.views);
+
+                                    if(new_rule2.lift>=min_lift)//min_guven can also be tested here
+                                    {
+                                        if(!rules.containsKey(new_rule2.source))
+                                        {
+                                            rules.put(new_rule2.source,new ArrayList<>(500));
+                                        }
+                                        rules.get(new_rule2.source).add(new_rule2);
+                                    }
+
+                                }
+
                             }while (machine.next_comb());
 
-                        }
 
+
+                        }
+                        System.out.print("\nfined the rules for ");
+                        for (int x : ids){System.out.print(x  + ",");}
+                        System.out.print(" in " + (System.currentTimeMillis() - start_time) + " milliseconds!\n");
                     }
 
                 }
 
+                System.out.println("\nfined all the rules! now starting to write");
 
+                LinkedHashMap<ArrayList<Integer>,String> rules_map = new LinkedHashMap<>(rules.size()+1,1);
+                ObjectOutputStream writer;
+                for(Map.Entry<ArrayList<Integer>,ArrayList<rule>> entry : rules.entrySet())
+                {
+                    entry.getValue().sort(Comparator.comparingDouble(rule -> rule.lift));
+
+                    StringBuilder path = new StringBuilder(main_path + "\\data_base\\R_s");
+                    path.append(entry.getKey().size() +
+                            "_t" + ( combination - entry.getKey().size() ));
+                    for(Integer x : entry.getKey()){path.append("_").append(x);}
+                    path.append(".bin");
+
+                    writer = new ObjectOutputStream(new FileOutputStream(path.toString()));
+                    writer.writeObject(entry.getValue());
+                    writer.close();
+
+                    System.out.println("wrote the rules onto: " + path);
+
+                    rules_map.put(entry.getKey(),path.toString());
+                }
+                writer = new ObjectOutputStream( new FileOutputStream(main_path+"\\rules_" + combination + ".bin"));
+                writer.writeObject(rules_map);
+                writer.close();
             }
             return 0;
         }
