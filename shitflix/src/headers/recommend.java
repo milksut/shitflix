@@ -123,52 +123,38 @@ public class recommend
         {
             int max_target =1;
             watched_movies.sort(Comparator.comparingInt(r->r.rating));
-            ArrayList<Integer> watched_movies2 = new ArrayList<>(watched_movies.size());
+            HashSet<Integer> watched_movies2 = new HashSet<>(watched_movies.size());
             for(veri_temizleme.rating x: watched_movies){watched_movies2.add(x.movie_id);}
 
             LinkedHashSet<Integer> recommendations = new LinkedHashSet<>(11);
 
             HashMap<Integer,LinkedHashMap<ArrayList<Integer>,String>> maps = new HashMap<>(max_rule_length);
 
-            for (int i = max_rule_length; i <= 2;)
+            for (int i = max_rule_length; i >= 2;)
             {
                 if(!maps.containsKey(i))
                 {
-                    ObjectInputStream reader = new ObjectInputStream(new FileInputStream(path+"\\rules_"+i+".bin"));
-                    maps.put(i,(LinkedHashMap<ArrayList<Integer>,String>) reader.readObject());
-                    reader.close();
+                    try (ObjectInputStream reader = new ObjectInputStream(new FileInputStream(path + "\\rules_" + i + ".bin"))) {
+                        maps.put(i, (LinkedHashMap<ArrayList<Integer>, String>) reader.readObject());
+                    }
                 }
                 for(Map.Entry<ArrayList<Integer>,String> entry : maps.get(i).entrySet())
                 {
-                    if(entry.getKey().size()>i-max_target){continue;}
-                    if(entry.getKey().size()<i-max_target)
-                    {
-                        if(i<max_rule_length)
-                        {
-                            i++;
-                            max_target++;
-                        }
-                        else
-                        {
-                            i = i-max_target;
-                            max_target=1;
-                        }
-                        break;
-                    }
-
+                    if(entry.getKey().size()!=i-max_target){continue;}
                     if(!entry.getKey().contains(movie_id)){continue;}
 
                     boolean working = false;
                     for(Integer x : entry.getKey())
                     {
-                        if(x==movie_id && !watched_movies2.contains(x)){working = true;break;}
+                        if(x!=movie_id && !watched_movies2.contains(x)){working = true;break;}
                     }
 
                     if(working){continue;}
 
-                    ObjectInputStream reader = new ObjectInputStream(new FileInputStream(entry.getValue()));
-                    ArrayList<veri_temizleme.rule> rules = (ArrayList<veri_temizleme.rule>) reader.readObject();
-                    reader.close();
+                    ArrayList<veri_temizleme.rule> rules;
+                    try (ObjectInputStream reader = new ObjectInputStream(new FileInputStream(entry.getValue()))) {
+                        rules = (ArrayList<veri_temizleme.rule>) reader.readObject();
+                    }
 
                     for(veri_temizleme.rule x : rules)
                     {
@@ -184,6 +170,17 @@ public class recommend
                             }
                         }
                     }
+                }
+
+                if(i<max_rule_length)
+                {
+                    i++;
+                    max_target++;
+                }
+                else
+                {
+                    i = i-max_target;
+                    max_target=1;
                 }
             }
             return recommendations;

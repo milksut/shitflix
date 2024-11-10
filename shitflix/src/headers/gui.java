@@ -203,6 +203,7 @@ public class gui
 
             do_the_job.addActionListener(a->
             {
+                long time_start = System.currentTimeMillis();
                 movies.removeAllItems();
                 LinkedHashSet<Integer> temp;
                 if(popular.isSelected() && for_genre.isSelected())
@@ -245,6 +246,7 @@ public class gui
                     }
                     movies.setVisible(true);
                 }
+                System.out.println("fined recs in " +(System.currentTimeMillis()-time_start)+" milliseconds!");
             });
 
             main_frame.add(panel3);
