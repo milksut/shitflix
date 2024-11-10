@@ -73,7 +73,7 @@ public class veri_temizleme
 
     }
 
-    static class rating implements Serializable
+    static public class rating implements Serializable
     {
         @Serial
         private static final long serialVersionUID = 1L;//I don't know what it does, it recommended when making objects serializable
@@ -165,6 +165,8 @@ public class veri_temizleme
             LinkedHashMap<Integer,ArrayList<rating>> new_ratings = new LinkedHashMap<>(150000);
             // number is experimental. object is  LinkedHashMap<user_id,((movie_id-rating(base 100))...)>
 
+            ArrayList<Integer> new_users = new ArrayList<>(150000);
+
             while(working)
             {
                 reading_line = rating_reader.readLine();
@@ -183,6 +185,7 @@ public class veri_temizleme
                         }
 
                         new_ratings.put(current_user_id,(ArrayList<rating>)ratings.clone());
+                        new_users.add(current_user_id);
 
                         System.out.println("finished gathering the ratings of " + current_user_id);
 
@@ -199,6 +202,10 @@ public class veri_temizleme
                     System.out.println("Started to write");
                     rating_writer.writeObject(new_ratings);
                     System.out.println("Finished the writing in " + (System.currentTimeMillis() - start_time) +" milliseconds!");
+                    rating_writer.close();
+
+                    rating_writer = new ObjectOutputStream(new FileOutputStream(main_path+"\\users.bin"));
+                    rating_writer.writeObject(new_users);
 
                     working =false;
                     rating_writer.close();
@@ -517,7 +524,7 @@ public class veri_temizleme
                     directory.mkdirs(); // Creates the directory and any necessary parent directories
                 }
 
-                ObjectOutputStream writer = new ObjectOutputStream(new FileOutputStream(main_path + "\\popular\\" + genres[i] + "\\ratings_1.bin"));
+                ObjectOutputStream writer = new ObjectOutputStream(new FileOutputStream(main_path + "\\popular\\" + genres[i] + "\\rating_1.bin"));
 
                 LinkedHashMap<ArrayList<Integer>,String> writing_map = new LinkedHashMap<>(1);
                 ArrayList<Integer> temp = new ArrayList<>(1);
@@ -821,8 +828,7 @@ public class veri_temizleme
                     entry.getValue().sort(Comparator.comparingDouble(rule -> rule.lift));
 
                     StringBuilder path = new StringBuilder(main_path + "\\data_base\\R_s");
-                    path.append(entry.getKey().size() +
-                            "_t" + ( combination - entry.getKey().size() ));
+                    path.append(entry.getKey().size()).append("_t").append(combination - entry.getKey().size());
                     for(Integer x : entry.getKey()){path.append("_").append(x);}
                     path.append(".bin");
 
